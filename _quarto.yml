@@ -1,0 +1,12 @@
+project:
+  type: default
+  output-dir: docs
+  render:
+    - overview.qmd
+    - zealandia_slides.qmd
+    - zealandia_handout.qmd
+    - exercise.qmd
+
+# CHANGE THIS ONE LINE to your GitHub Pages address (keep the final slash).
+# Both QR codes and the handout QR use it.
+site_url: "https://github.com/adya-varshini/DAppt.adya"

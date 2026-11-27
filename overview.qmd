@@ -1,0 +1,107 @@
+---
+title: "Geospatial Visualization with R"
+subtitle: "Zealandia, Earth's hidden eighth continent · what we will do today"
+author: "Adya Varshini B · balaguru.adya@stud.hs-fresenius.de · Matr. Nr. 401468367"
+format:
+  html:
+    embed-resources: true
+    page-layout: article
+    code-copy: true
+---
+
+## What is geospatial visualization?
+
+Almost every dataset has a hidden **where**: a store, a customer, a delivery, a patient, even a point on the sea floor. **Geospatial visualization** puts that "where" on a map, so that patterns appear which a table of numbers hides.
+
+The most famous example is older than computers. In 1854 the doctor John Snow marked cholera deaths on a street map of London. The deaths clustered around one water pump, and that picture helped show how the disease spread (Snow, 1855). The data was only a list of addresses. The **map** was the insight.
+
+## Where is it used today?
+
+- **Retail:** where to open the next store, based on where customers live and where competitors are
+- **Logistics:** the fastest routes and the best locations for warehouses
+- **Real estate:** price maps by neighbourhood
+- **Insurance:** flood and storm risk zones
+- **Health:** where a disease is spreading and where clinics are needed
+- **Marketing:** which regions respond to a campaign
+
+## Three ideas behind every map
+
+1. **Coordinates.** A place is two numbers: **longitude** (east-west) and **latitude** (north-south). Your phone's GPS uses the same system.
+2. **Vector or raster.** *Vector* data are points, lines and shapes (a store, a road, a country). *Raster* data are a grid of cells with one value each (elevation, temperature, satellite pictures).
+3. **A good colour scale.** The colours decide what you see. A smart scale makes the important pattern obvious.
+
+## How R helps
+
+R is free and has packages for each step:
+
+| Step | Package |
+|---|---|
+| Read and process spatial data | `sf` (vector), `terra` (raster) |
+| Draw maps | `ggplot2`, `tmap` |
+| Interactive web maps | `leaflet` |
+
+## Today's example: Zealandia
+
+Most of us learned that Earth has seven continents. Scientists have proposed an **eighth: Zealandia**, in the South Pacific. About 94% of it lies under water; only New Zealand and New Caledonia rise above the sea. Nobody could see it on a normal map. With **elevation data** and a good colour scale, it appears.
+
+## What I will show you (10 minutes)
+
+1. **Where are we?** From the Hochschule Fresenius campus we zoom out to the whole Earth.
+2. **The eighth continent.** Why Zealandia counts as a continent.
+3. **The data.** An elevation grid called GEBCO: every cell has a longitude, a latitude and one number, the height in metres (negative = below sea level).
+4. **Live coding in R.** We load the grid, make it smaller, choose the colours and draw the map.
+5. **Reading the map.** Shallow platforms, deep basins and the few islands that stick out.
+6. **Your turn.** A 5-minute exercise on your own phone or laptop.
+
+## The R you need for the exercise
+
+You only need five small ideas. Lines starting with `#` are comments: R ignores them.
+
+**1. Store a value.** The arrow `<-` puts a value under a name.
+
+```r
+city <- "Cologne"
+```
+
+**2. Make a list.** `c()` combines values.
+
+```r
+lon <- c(6.96, 174.78, 80.27)
+lat <- c(50.94, -41.29, 13.08)
+```
+
+**3. Make a table.** `data.frame()` puts lists side by side as columns. Each row is a place.
+
+```r
+cities <- data.frame(
+  name = c("Cologne", "Wellington", "Chennai"),
+  lon  = c(6.96, 174.78, 80.27),
+  lat  = c(50.94, -41.29, 13.08)
+)
+```
+
+**4. Use a function.** A function does a job when you add `()` and give it inputs. `draw_world()` draws the world map; `add_places(cities, col = "red")` puts your table on it in red.
+
+```r
+draw_world()
+add_places(cities, col = "red")
+```
+
+**5. Change a value, run again.** That is the whole exercise: change a name or a number, press Run, and the map updates.
+
+## In the exercise you will
+
+- see a world map with Zealandia in turquoise and three places,
+- change **"Chennai"** to **your hometown** and watch it appear on the map,
+- change the colour of the markers,
+- add a fourth place.
+
+Nothing to install: R runs in your browser.
+
+## Links
+
+- [Slides](zealandia_slides.html)
+- [Handout (HTML)](zealandia_handout.html) · [Handout (PDF)](zealandia_handout.pdf)
+- [Open the exercise](exercise.html)
+
+<span style="font-size:.85em">Snow, J. (1855). *On the mode of communication of cholera* (2nd ed.). John Churchill.</span>

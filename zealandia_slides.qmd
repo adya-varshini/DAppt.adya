@@ -1,0 +1,148 @@
+---
+pagetitle: "Geospatial Visualization with R"
+format:
+  revealjs:
+    theme: dark
+    width: 1280
+    height: 720
+    margin: 0
+    transition: fade
+    slide-number: false
+    progress: false
+    hash: true
+    embed-resources: true
+    include-after-body: globe.html
+---
+
+## Where are we? {.wide}
+
+**Hochschule Fresenius, Cologne, Germany**
+
+Geospatial Visualization with R · Data Analysis for Decision-Making, WS 2026
+
+<span class="m">Adya Varshini B · balaguru.adya@stud.hs-fresenius.de · Matr. Nr. 401468367</span>
+
+## Seven continents
+
+<span class="k">Cologne → Germany → Europe → the world</span>
+
+Africa, Antarctica, Asia, Australia, Europe, North America and South America. That is what most of us learned.
+
+<span class="chip">7 continents</span>
+
+## There is an eighth.
+
+Hiding in the South Pacific, about 18,000 km from this room: **Zealandia**.
+
+<span class="chip">≈ 4.9 million km²</span><span class="chip">≈ 94% underwater</span><span class="chip">proposed, not yet official</span>
+
+## Why call it a continent? {.wide}
+
+- Raised above the surrounding ocean floor
+- Distinct geology
+- A well-defined area
+- Thicker crust than the ocean floor
+
+<span class="m">Criteria and figures: Mortimer et al. (2017)</span>
+
+## What can you build with maps like this? {.full}
+
+<span class="chip">Retail: where to open the next store</span><span class="chip">Logistics: the fastest delivery routes</span><span class="chip">Real estate: price maps by neighbourhood</span><span class="chip">Insurance: flood and storm risk zones</span><span class="chip">Health: how a disease spreads</span><span class="chip">Marketing: where your customers live</span>
+
+Zealandia is one example. The method is the same everywhere: **data with a location, turned into a map**.
+
+## Introducing the data {.full}
+
+::: {.columns}
+::: {.column width="52%"}
+**GEBCO**: one global grid of elevation, land and sea floor.
+
+Every **raster cell** stores a longitude, a latitude and **one value**: elevation in metres.
+
+Positive = land. Negative = sea floor.
+:::
+::: {.column width="48%"}
+```{=html}
+<table class="grid">
+<tr><td>-4200</td><td>-3900</td><td>-2600</td><td>-1800</td></tr>
+<tr><td>-3800</td><td>-2400</td><td>-900</td><td>-300</td></tr>
+<tr><td>-3500</td><td>-2100</td><td class="hi">120</td><td>640</td></tr>
+<tr><td>-3300</td><td>-1900</td><td>310</td><td>1450</td></tr>
+</table>
+```
+<span class="m">Teal cell: above sea level (an island). Cell size: 15 arc-seconds.</span>
+:::
+:::
+
+## Live coding 1: load the data {.full}
+
+```{.r code-line-numbers="1|2|3-6|7"}
+library(terra)
+files <- list.files("data", pattern = "\\.(tif|nc)$", full.names = TRUE)
+tiles <- lapply(files, function(f) {
+  r <- rast(f)                        # read the raster
+  if (xmin(r) < 0) r <- shift(r, dx = 360)   # date line fix
+  r })
+elev <- if (length(tiles) == 1) tiles[[1]] else do.call(merge, tiles)
+```
+
+<span class="m">`rast()` reads a file as a raster. East of the date line longitudes are negative, so we shift them by 360° to get one continuous Pacific. `merge()` joins the tiles.</span>
+
+## Live coding 2: process the raster {.full}
+
+```{.r code-line-numbers="1|2-3"}
+elev_s <- aggregate(elev, fact = 10, fun = "mean", na.rm = TRUE)
+df <- as.data.frame(elev_s, xy = TRUE, na.rm = TRUE)
+names(df) <- c("lon", "lat", "elev")
+```
+
+<span class="m">Millions of cells are too many to plot: `aggregate()` averages 10 × 10 blocks. `as.data.frame(xy = TRUE)` gives one row per cell (lon, lat, elev), which is what `ggplot2` needs.</span>
+
+## Live coding 3: the colour scale {.full}
+
+<div class="bar"></div>
+<div class="scale"><span>−10,500 m</span><span>−2,000</span><span>0 m (shoreline)</span><span>1,500</span><span>3,800 m</span></div>
+
+```{.r}
+br   <- c(-10500, -6000, -4000, -2000, -1000, -200, 0, 500, 1500, 3800)
+cols <- c("#030b2e", "#0a2463", "#1b4f9c", "#2f80c9", "#5db0e6",
+          "#b5e3f5", "#efe6b8", "#7fb069", "#a67c52", "#ffffff")
+```
+
+<span class="m">One colour per break; `ggplot2` blends in between. Sea and land get different hues, so 0 m is a clear coastline.</span>
+
+## Live coding 4: build the map {.full}
+
+```{.r code-line-numbers="1-2|3-4|5-6|7"}
+ggplot(df, aes(lon, lat)) +
+  geom_raster(aes(fill = elev)) +
+  scale_fill_gradientn(colours = cols, values = scales::rescale(br),
+                       limits = range(br), oob = scales::squish) +
+  geom_contour(aes(z = elev), breaks = c(-2500, 0), colour = "white") +
+  coord_quickmap() +
+  theme_minimal()
+```
+
+<span class="m">`geom_raster` paints each cell. `scale_fill_gradientn` applies our colours. `geom_contour` draws the 0 m coastline and the 2,500 m line. `coord_quickmap` keeps the map shape right.</span>
+
+## Reading the map {.full}
+
+```{r}
+#| echo: false
+if (file.exists("zealandia_map.png")) knitr::include_graphics("zealandia_map.png") else knitr::asis_output("*Run zealandia_gebco.R first: it creates zealandia_map.png.*")
+```
+
+<span class="chip">shallow platforms: pale blue</span><span class="chip">deep basins and trenches: dark blue</span><span class="chip">visible islands: beige to brown</span>
+
+## The elevation distribution {.full}
+
+```{r}
+#| echo: false
+if (file.exists("zealandia_hist.png")) knitr::include_graphics("zealandia_hist.png") else knitr::asis_output("*Run zealandia_gebco.R first: it creates zealandia_hist.png.*")
+```
+
+Two humps: **shallow platform** and **deep ocean floor**. Almost nothing near 0 m: a continent that is almost entirely submerged looks like a plateau, not like land.
+
+## Your turn {.qrs}
+
+<div class="qr" data-url="{{< meta site_url >}}exercise.html"></div>

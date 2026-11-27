@@ -1,0 +1,204 @@
+---
+title: "Geospatial Visualization with R: Mapping Zealandia with GEBCO Bathymetry"
+subtitle: "Data Analysis for Decision-Making (WS 2026)"
+
+author:
+  - name: Adya Varshini B (Matr. Nr. 401468367)
+    affiliation: Fresenius University of Applied Science, Cologne
+    email: balaguru.adya@stud.hs-fresenius.de
+    corresponding: true
+
+course: Data Analysis for Decision-Making
+professor: Prof. Dr. Stephan Huber
+date: 2026-11-22
+date-format: long
+abstract: "Maps turn the 'where' of data into insight. This handout shows how to build a map of Zealandia, the proposed eighth continent that lies about 94% below the South Pacific, using the GEBCO elevation grid and the R packages terra and ggplot2. It explains coordinates, raster data and a colour scale that separates land from sea, and shows how to read shallow platforms, deep basins and visible islands. It ends with a beginner exercise that runs in the browser."
+
+format:
+  apaquarto-pdf:
+    documentmode: stu
+  html:
+    embed-resources: true
+    page-layout: article
+
+a4paper: true
+
+bibliography: references.bib
+csl: apa.csl
+
+reference-location: document
+number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(terra); library(ggplot2); library(scales); library(dplyr)
+has_data <- length(list.files("data", pattern = "\\.(tif|tiff|nc)$", ignore.case = TRUE)) > 0
+```
+
+```{r}
+#| label: fig-qr
+#| echo: false
+#| fig-cap: "Scan to open the slides, this handout and the exercise online."
+#| fig-width: 1.3
+#| fig-height: 1.3
+#| fig-align: center
+# EDIT THIS LINE: your GitHub Pages address (keep the final slash)
+site_url <- "https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPOSITORY/"
+m <- unclass(qrcode::qr_code(paste0(site_url, "overview.html")))
+par(mar = c(1, 1, 1, 1))
+image(t(m[nrow(m):1, ]), col = c("white", "black"), axes = FALSE, asp = 1)
+```
+
+# What is geospatial visualization?
+
+Almost every dataset contains a location, and geospatial visualization turns that "where" into a map so that patterns become visible at a glance [@pebesma2023]. The classic example is John Snow's map of cholera deaths in London in 1854: the deaths clustered around one water pump, and the map made the pattern obvious [@snow1855]. Today the same idea supports store location choice, delivery planning, price maps, flood-risk zoning and disease tracking. Three ideas underlie every map. First, a place is described by *coordinates*, here longitude (east-west) and latitude (north-south) in the GPS system WGS 84. Second, spatial data are either *vector* data (points, lines and polygons) or *raster* data (a grid of cells with one value each) [@lovelace2025]. Third, the *colour scale* decides what the reader sees.
+
+# Case study: Zealandia
+
+Zealandia is a good teaching case because the pattern is dramatic. It is a *proposed* continent of about 4.9 million km², of which roughly 94% lies under water; only New Zealand and New Caledonia rise above the sea [@mortimer2017]. It is not formally recognised by an official body. Mortimer et al. [-@mortimer2017] argue that it meets the geological tests for a continent: it is elevated above the surrounding ocean floor, has distinct geology, forms a well-defined area and has thicker crust than the ocean floor.
+
+# Data and tools
+
+The General Bathymetric Chart of the Oceans (GEBCO) provides one global elevation grid for land and sea floor [@gebco]. It is a raster: each cell stores a longitude, a latitude and one value, the *elevation in metres relative to sea level* (positive = land, negative = sea floor). The resolution is 15 arc-seconds, so the South Pacific alone contains tens of millions of cells. Two tiles (155°E to 180° and 180° to 165°W, 10°S to 60°S) were downloaded so that Zealandia is complete on both sides of the date line. The analysis uses R [@rcore], the package `terra` for rasters [@terra] and `ggplot2` for drawing [@ggplot2].
+
+# Method: from raster to map
+
+Three steps matter. First, tiles east of the date line use negative longitudes, so they are shifted by 360° to make the Pacific one continuous map. Second, averaging blocks of 10 × 10 cells (about 2.5 arc-minutes) keeps the map sharp but fast to draw. Third, the colour scale is the main design decision: sea and land get different hues, and the break at 0 m is a clear shoreline.
+
+```{r}
+#| label: load
+#| echo: true
+#| eval: !expr has_data
+files <- list.files("data", pattern = "\\.(tif|tiff|nc)$",
+                    ignore.case = TRUE, full.names = TRUE)
+tiles <- lapply(files, function(f) {
+  r <- rast(f)
+  if (xmin(r) < 0) r <- shift(r, dx = 360)
+  r
+})
+elev <- if (length(tiles) == 1) tiles[[1]] else do.call(merge, tiles)
+names(elev) <- "elev"
+elev_s <- aggregate(elev, fact = 10, fun = "mean", na.rm = TRUE)
+df <- as.data.frame(elev_s, xy = TRUE, na.rm = TRUE)
+names(df) <- c("lon", "lat", "elev")
+```
+
+```{r}
+#| label: fig-map
+#| echo: true
+#| eval: !expr has_data
+#| fig-cap: "Elevation of the South Pacific around Zealandia (GEBCO). The white line marks 2,500 m depth; the dashed line is a simplified outline."
+#| fig-width: 6.5
+#| fig-height: 4.6
+br   <- c(-10500, -6000, -4000, -2000, -1000, -200, 0, 500, 1500, 3800)
+cols <- c("#030b2e", "#0a2463", "#1b4f9c", "#2f80c9", "#5db0e6",
+          "#b5e3f5", "#efe6b8", "#7fb069", "#a67c52", "#ffffff")
+zx <- c(160, 164, 169, 172, 175, 179, 183, 185, 184,
+        178, 167, 165, 167, 166, 162, 159, 160)
+zy <- c(-22, -19, -20, -25, -31, -36, -41, -46, -50,
+        -54, -55, -50, -45, -40, -35, -29, -22)
+outline <- data.frame(lon = zx, lat = zy)
+lon_lab <- function(x) {
+  ifelse(x > 180, paste0(360 - x, "W"), paste0(x, "E"))
+}
+lat_lab <- function(y) paste0(abs(y), "S")
+
+ggplot(df, aes(lon, lat)) +
+  geom_raster(aes(fill = elev)) +
+  scale_fill_gradientn(colours = cols, values = rescale(br),
+                       limits = range(br), oob = squish,
+                       name = "Elevation (m)") +
+  geom_contour(aes(z = elev), breaks = -2500,
+               colour = "white", linewidth = .25) +
+  geom_contour(aes(z = elev), breaks = 0,
+               colour = "black", linewidth = .25) +
+  geom_path(data = outline, aes(lon, lat), inherit.aes = FALSE,
+            colour = "#0fffd0", linetype = "dashed") +
+  scale_x_continuous(labels = lon_lab, expand = c(0, 0)) +
+  scale_y_continuous(labels = lat_lab, expand = c(0, 0)) +
+  coord_quickmap() + labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 10)
+```
+
+# Reading the map
+
+@fig-map shows three patterns. First, *shallow continental regions*: pale blue plateaus (Lord Howe Rise in the west, Campbell Plateau in the south, Chatham Rise in the east) stand far above the dark ocean floor around them. Second, *deep basins and trenches*: the Tasman Basin, the South Fiji Basin and the Kermadec Trench are the darkest blues. Third, *visible islands*: only the beige-to-brown cells, New Zealand and New Caledonia, are above 0 m.
+
+```{r}
+#| label: tbl-classes
+#| echo: false
+#| eval: !expr has_data
+#| tbl-cap: "Share of the simplified Zealandia outline by depth class"
+zpoly <- vect(cbind(id = 1, part = 1, x = zx, y = zy), type = "polygons", crs = "EPSG:4326")
+roi <- as.data.frame(c(mask(elev_s, zpoly), cellSize(elev_s, unit = "km")), na.rm = TRUE)
+names(roi) <- c("elev", "area_km2")
+roi$Class <- cut(roi$elev, c(-Inf, -5000, -2500, -200, 0, Inf),
+  labels = c("Deep basin (< -5,000 m)", "Slope (-5,000 to -2,500 m)",
+             "Platform (-2,500 to -200 m)", "Shelf (-200 to 0 m)", "Land (> 0 m)"))
+tab <- roi |> group_by(Class) |>
+  summarise(`Area (million km²)` = round(sum(area_km2) / 1e6, 2), .groups = "drop") |>
+  mutate(`Share (%)` = round(100 * `Area (million km²)` / sum(`Area (million km²)`), 1))
+knitr::kable(tab)
+```
+
+@tbl-classes turns the colours into numbers: the share of land should be small (the published figure is about 6%), while the platform class dominates. The elevation distribution in @fig-hist explains why.
+
+```{r}
+#| label: fig-hist
+#| echo: false
+#| eval: !expr has_data
+#| fig-cap: "Histogram of elevation. The two humps are the shallow platform and the deep ocean floor."
+#| fig-width: 5.5
+#| fig-height: 2.4
+set.seed(1)
+ggplot(df[sample(nrow(df), min(nrow(df), 2e5)), ], aes(elev)) +
+  geom_histogram(binwidth = 100, fill = "#2f80c9") +
+  geom_vline(xintercept = c(-2500, 0), linetype = c("dashed", "solid")) +
+  labs(x = "Elevation (m)", y = "Cells") + theme_minimal(base_size = 10)
+```
+
+The histogram is *bimodal*: one hump of cells at moderate depth (the continental platform) and another much deeper (the oceanic basins), with very few cells near 0 m. A continent that is submerged in this way shows up as a plateau, not as land.
+
+# Limitations and further resources
+
+The outline used here is a simplified polygon, not an official boundary, and the 2,500 m contour is only a teaching proxy: the true boundary is defined by geology, not by one depth [@mortimer2017]. Averaging cells reduces detail, and cells shrink toward the poles, which is why the table uses `cellSize()` for areas. For further reading, *Geocomputation with R* [@lovelace2025] and *Spatial Data Science* [@pebesma2023] cover vector and raster data in depth, and *R for Data Science* [@r4ds] covers the `ggplot2` basics.
+
+# Exercise for beginners: put yourself on the map
+
+No R experience is needed, and nothing has to be installed: the exercise runs in the browser (QR code in @fig-qr). The starter code (on the exercise page) draws the world, Zealandia in turquoise and three places. Participants (1) press *Run Code*, (2) replace "Chennai" and its numbers by their hometown, (3) change the colour `"red"`, and (4) add a fourth place. Longitude is counted from 0° to 360° so that Zealandia stays in one piece.
+
+```{r}
+#| label: fig-exercise
+#| echo: false
+#| fig-cap: "Output of the starter code: the world, Zealandia (turquoise) and three places."
+#| fig-width: 6
+#| fig-height: 2.9
+library(maps)
+cities <- data.frame(name = c("Cologne", "Wellington", "Chennai"),
+                     lon = c(6.96, 174.78, 80.27), lat = c(50.94, -41.29, 13.08))
+zx <- c(160,164,169,172,175,179,183,185,184,178,167,165,167,166,162,159,160)
+zy <- c(-22,-19,-20,-25,-31,-36,-41,-46,-50,-54,-55,-50,-45,-40,-35,-29,-22)
+map("world2", xlim = c(0, 360), ylim = c(-65, 80), fill = TRUE, col = "#9bd17a", bg = "#0f4c81",
+    border = "#3f7d3f", lwd = .3, mar = c(.5, .5, .5, .5))
+polygon(zx, zy, col = rgb(.05, .95, .8, .55), border = "#0fffd0", lwd = 2)
+points(cities$lon, cities$lat, pch = 21, bg = "red", col = "white", cex = 1.6)
+text(cities$lon, cities$lat + 7, cities$name, font = 2, cex = .8)
+```
+
+::: {.callout-tip appearance="default" title="Affidavit" icon=false}
+I hereby affirm that this submitted paper was authored unaided and solely by me. Additionally, no other sources than those in the reference list were used. Parts of this paper, including tables and figures, that have been taken either verbatim or analogously from other works have in each case been properly cited with regard to their origin and authorship. This paper either in parts or in its entirety, be it in the same or similar form, has not been submitted to any other examination board and has not been published.
+
+I acknowledge that the university may use plagiarism detection software to check my thesis. I agree to cooperate with any investigation of suspected plagiarism and to provide any additional information or evidence requested by the university.
+
+Adya Varshini B, 22-11-2026, Cologne
+:::
+
+# References
+
+::: {#refs}
+:::
